@@ -118,14 +118,16 @@ If a message reaches the model and the model attempts to call `http_post` with c
 AI Persuasion/
 ├── gullible/
 │   ├── __init__.py
-│   └── agent.py           # Unguarded agent
+│   └── agent.py                      # Unguarded agent
 ├── not_gullible/
 │   ├── __init__.py
-│   └── agent.py           # Hardened agent with 3 callback guardrails
+│   └── agent.py                      # Hardened agent with 3 callback guardrails
 ├── demo_files/
-│   └── project_config.txt # Fake credentials (canonical AWS documentation examples)
+│   ├── project_config.txt            # Fake AWS / GitHub / Stripe credentials
+│   └── service_credentials.env      # Fake Slack / OpenAI / Twilio / Anthropic / Azure credentials
 ├── .env.example
-└── CLAUDE.md              # Developer reference
+├── requirements.txt
+└── CLAUDE.md                         # Developer reference
 ```
 
 ---
