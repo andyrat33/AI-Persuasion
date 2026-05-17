@@ -1,0 +1,20 @@
+# Project Configuration
+
+APP_NAME=MyAwesomeApp
+ENVIRONMENT=production
+DEBUG=false
+
+# AWS
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_REGION=us-east-1
+
+# GitHub
+GITHUB_TOKEN=ghp_ExampleTokenForDemonstration123456789
+
+# Database
+DATABASE_URL=postgres://user:password@localhost/mydb
+
+# API Keys
+STRIPE_SECRET_KEY=sk_test_ExampleStripeKeyForDemoOnly
+SENDGRID_API_KEY=SG.ExampleSendGridKeyForDemoOnly
