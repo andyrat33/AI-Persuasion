@@ -57,6 +57,10 @@ def _contains_credentials(text: str) -> bool:
 
 
 def _is_persuasion_attack(text: str) -> bool:
+    # No single marker is conclusive — benign messages can mention "apples" or "endpoint".
+    # Requiring 3+ co-occurring markers dramatically reduces false positives while still
+    # catching the treasure hunt pattern, which needs game framing + credential formats +
+    # an exfiltration target all present together.
     text_lower = text.lower()
     matched = sum(1 for marker in _PERSUASION_MARKERS if marker.lower() in text_lower)
     return matched >= 3
