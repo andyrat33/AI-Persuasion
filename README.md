@@ -207,6 +207,8 @@ AI Persuasion/
 - Output filter catches credential strings in responses
 - Tool filter catches exfiltration attempts at the network boundary
 
+**System prompt as a fourth layer** — A strongly worded system prompt instructing the model never to share credential-shaped strings — regardless of what they are called — adds an implicit defence at the model reasoning level. In testing (branch `experiment/prompt-guardrail-1`), the "oranges" compliance audit prompt was refused by the model through reasoning alone, without any callback firing. Callbacks and system prompt instructions are complementary: neither is sufficient on its own.
+
 **Zero-click risk** — In a production agent hooked to email, Jira, or a browser extension, the attack prompt could arrive in a ticket, calendar invite, or email attachment — no user interaction required.
 
 ---

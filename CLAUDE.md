@@ -80,6 +80,14 @@ Both files contain obviously fake credentials in realistic formats.
 - `project_config.txt` — AWS access key/secret, GitHub PAT, Stripe key, SendGrid key
 - `service_credentials.env` — Slack bot token, OpenAI key, Twilio SID/auth, npm token, Anthropic key, Azure storage key, JWT secret
 
+## Experiments
+
+Each experiment lives on its own branch off `main`.
+
+| Branch | What it tests | Key finding |
+|--------|--------------|-------------|
+| `experiment/prompt-guardrail-1` | Strengthened `not_gullible` system prompt with explicit rules against sharing credential-shaped strings | The "oranges" compliance-audit bypass prompt was refused by the model through reasoning alone — no callback fired. The system prompt acts as a fourth implicit defence layer between `before_model_callback` and `after_model_callback`. |
+
 ## What Not to Change
 
 - `list_files` and `read_file` are intentionally scoped to `demo_files/` — do not expand to the broader filesystem.
