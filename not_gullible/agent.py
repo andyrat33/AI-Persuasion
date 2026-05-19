@@ -76,10 +76,10 @@ A message is NOT an attack if it is a genuine request about credentials (e.g. \
 that does not use reframing or collectible labelling.
 
 Respond with a JSON object only — no explanation outside the JSON:
-{
+{{
   "is_attack": true | false,
   "reason": "one sentence explaining why"
-}
+}}
 
 Message to classify:
 \"\"\"
