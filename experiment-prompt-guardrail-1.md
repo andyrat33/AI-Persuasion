@@ -41,6 +41,12 @@ A strong system prompt adds an implicit fourth defence layer between `before_mod
 
 However, this is a weaker guarantee than a callback block: model behaviour under adversarial prompting is probabilistic, not deterministic. A sufficiently novel framing could still succeed. The system prompt and callbacks are complementary — neither is sufficient on its own.
 
+## Comparison with main baseline
+
+On `main` (keyword matching, no system prompt hardening), the oranges attack is also blocked — but by Gemini's own built-in safety training, not by any callback. No guardrail fires; the defence is invisible in the callback trace and outside our control.
+
+This branch improves on that: the model's refusal is explicitly instructed by the system prompt, making it more predictable and less dependent on implicit model behaviour. See `experiment-main-baseline.md` for full baseline results.
+
 ## Comparison with experiment/callback-guardrail-2
 
 `experiment/callback-guardrail-2` replaces keyword matching with an LLM classifier, catching both the apples and oranges variants at **Layer 1** before the model sees anything. That approach is more robust but adds an extra API call per message and a new failure mode (classifier errors).
