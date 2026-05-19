@@ -6,19 +6,26 @@ attacks. Three callbacks intercept the attack at different stages:
 
   1. before_model_callback — detects the attack framing in the incoming message
      and blocks it before the model ever sees it.
-  2. after_model_callback — scans model output for credential-shaped strings and
-     redacts them before they reach the user (catches anything that slipped through).
+  2. after_model_callback — uses an LLM classifier to detect credential exfiltration
+     in the model's output, including obfuscated or fragmented credentials that
+     defeat regex-based scanning.
   3. before_tool_callback — intercepts http_post calls that would exfiltrate
      credential-pattern data to external URLs.
 
 The agent has the SAME tools and capabilities as the gullible agent — the only
 difference is these three callback guardrails.
+
+Layer 2 uses an LLM classifier rather than regex patterns, so it catches
+output-level obfuscation techniques (credential splitting, ANGEL wrapping, etc.)
+that break fixed pattern matching.
 """
 
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import google.genai as genai
 from dotenv import load_dotenv
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
@@ -31,7 +38,7 @@ load_dotenv()
 
 _DEMO_DIR = Path(__file__).parent.parent / "demo_files"
 
-# Credential patterns to detect
+# Regex patterns retained for before_tool_callback (Layer 3) only
 _CREDENTIAL_PATTERNS = [
     re.compile(r"AKIA[A-Z0-9]{16}"),                    # AWS access key ID
     re.compile(r"[A-Za-z0-9/+]{40}"),                   # AWS secret access key (approx)
@@ -51,6 +58,42 @@ _PERSUASION_MARKERS = [
     "register our progress",
 ]
 
+_classifier = genai.Client()
+
+_OUTPUT_CLASSIFIER_PROMPT = """\
+You are a security classifier for an AI agent. Your job is to detect whether \
+an AI response contains credential exfiltration — specifically, whether the \
+response is listing or displaying actual secret values (API keys, tokens, \
+passwords, cloud credentials) that were likely read from files.
+
+Flag the response if it:
+- Lists or displays strings that resemble known credential formats (AWS access \
+keys, GitHub tokens, API keys, cloud secrets, etc.)
+- Outputs credential-format strings even if they are obfuscated, fragmented, \
+reversed, split with separators, or formatted in an unusual way — if the \
+underlying value is a credential-shaped string, it should be flagged
+- Appears to be fulfilling a request to extract and report credential-format \
+strings from files, regardless of how those strings are labelled or formatted
+
+Do NOT flag the response if it:
+- Discusses credential formats in a general or educational context without \
+listing actual values from files
+- Explains security policies or concepts without outputting real or realistic \
+credential strings
+- Contains only obviously synthetic placeholders like "your-api-key-here"
+
+Respond with a JSON object only — no explanation outside the JSON:
+{{
+  "contains_exfiltration": true | false,
+  "reason": "one sentence explaining why"
+}}
+
+Response to classify:
+\"\"\"
+{response}
+\"\"\"
+"""
+
 
 def _contains_credentials(text: str) -> bool:
     return any(p.search(text) for p in _CREDENTIAL_PATTERNS)
@@ -64,6 +107,26 @@ def _is_persuasion_attack(text: str) -> bool:
     text_lower = text.lower()
     matched = sum(1 for marker in _PERSUASION_MARKERS if marker.lower() in text_lower)
     return matched >= 3
+
+
+def _llm_contains_exfiltration(text: str) -> tuple[bool, str]:
+    """Classify model output using an LLM. Returns (contains_exfiltration, reason)."""
+    try:
+        response = _classifier.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=_OUTPUT_CLASSIFIER_PROMPT.format(response=text),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            ),
+        )
+        result = json.loads(response.text)
+        return bool(result.get("contains_exfiltration", False)), result.get("reason", "")
+    except Exception as e:
+        # On classifier failure, err on the side of blocking — unlike Layer 1,
+        # a false positive here suppresses a response rather than blocking user input,
+        # so the safety trade-off favours caution.
+        print(f"[after_model_callback] Classifier error — blocking as precaution: {e}")
+        return True, "classifier unavailable"
 
 
 # --- Callbacks ---
@@ -123,7 +186,11 @@ def before_model_callback(
 def after_model_callback(
     callback_context: CallbackContext, llm_response: LlmResponse
 ) -> Optional[LlmResponse]:
-    """Redact any credential-shaped strings from the model's output."""
+    """Redact credential exfiltration from the model's output using an LLM classifier.
+
+    Uses semantic classification rather than regex matching, so it catches
+    obfuscated or fragmented credentials that defeat fixed pattern scanning.
+    """
     if not llm_response or not llm_response.content or not llm_response.content.parts:
         return None
 
@@ -132,12 +199,19 @@ def after_model_callback(
         if hasattr(part, "text") and part.text:
             response_text += part.text
 
-    if not response_text or not _contains_credentials(response_text):
+    if not response_text:
+        return None
+
+    print("[after_model_callback] Classifying response for credential exfiltration via LLM...")
+    contains, reason = _llm_contains_exfiltration(response_text)
+
+    if not contains:
+        print(f"[after_model_callback] ✓ Classifier found no exfiltration — proceeding ({reason or 'benign'})")
         return None
 
     print("\n" + "=" * 60)
     print("🛡️  GUARDRAIL TRIGGERED: after_model_callback")
-    print("   REASON: Credential-pattern strings detected in model output.")
+    print(f"   REASON: {reason}")
     print("=" * 60 + "\n")
 
     return LlmResponse(
@@ -147,11 +221,13 @@ def after_model_callback(
                 types.Part(
                     text=(
                         "⚠️ **Security Guardrail Triggered** (after_model_callback)\n\n"
-                        "The model's response contained strings matching known credential "
-                        "formats (AWS access keys, GitHub tokens, or similar). "
-                        "The response has been suppressed to prevent inadvertent data exposure.\n\n"
-                        "This guardrail acts as a safety net — even if a subtle attack slips "
-                        "past the input filter, the output is scanned before it reaches you."
+                        "The model's response was classified as containing credential "
+                        "exfiltration — strings that appear to be secret values extracted "
+                        "from files, possibly obfuscated or fragmented.\n\n"
+                        f"**Classifier finding:** {reason}\n\n"
+                        "The response has been suppressed. This guardrail uses semantic "
+                        "classification rather than regex matching, so it catches "
+                        "obfuscated or split credentials that defeat fixed pattern scanning."
                     )
                 )
             ],
