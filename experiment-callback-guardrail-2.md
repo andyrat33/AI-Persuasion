@@ -50,7 +50,13 @@ Classifier reason: *"uses a compliance audit framing, redefines credential-forma
 
 This is the key improvement over keyword matching — the oranges variant uses different vocabulary, omits the external URL, and avoids every keyword from the previous approach. The classifier catches it semantically.
 
-## Comparison with experiment/callback-guardrail-1 (prompt hardening)
+## Comparison with main baseline
+
+On `main` (keyword matching, no classifier), the oranges attack is also blocked — but by Gemini's own built-in safety training, not by any callback. No guardrail fires; the defence is invisible in the callback trace and outside our control. See `experiment-main-baseline.md` for full baseline results.
+
+This branch improves on that by catching the attack at Layer 1 with an explicit, auditable classifier decision rather than relying on implicit model behaviour.
+
+## Comparison with experiment/prompt-guardrail-1 (prompt hardening)
 
 `experiment/callback-guardrail-2` catches both attacks at **Layer 1**, before the model ever sees the message. The prompt-hardening branch relied on the model reasoning its way out of the attack — a weaker guarantee, since model behaviour under adversarial prompting is not deterministic.
 
